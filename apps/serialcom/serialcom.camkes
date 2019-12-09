@@ -1,0 +1,58 @@
+/*
+ * Copyright 2019, DornerWorks
+ *
+ * This software may be distributed and modified according to the terms of
+ * the BSD 2-Clause license. Note that NO WARRANTY is provided.
+ * See "LICENSE_BSD2.txt" for details.
+ *
+ * @TAG(DORNERWORKS_BSD)
+ */
+
+import <std_connector.camkes>;
+import <SerialServer/SerialServer.camkes>;
+import <TimeServer/TimeServer.camkes>;
+import <global-connectors.camkes>;
+
+component SerialApplication {
+    control;
+    attribute int simple = true;
+    uses PutChar putchar;
+    uses GetChar getchar;
+    emits Callback self;
+    consumes Callback wait;
+}
+
+assembly {
+    composition {
+        component SerialApplication serial_app;
+        component SerialServer serial;
+        component TimeServer time_server;
+
+        connection seL4RPCCall serial_time_server(from time_server.putchar, to serial.processed_putchar);
+        connection seL4RPCCall serial_client(from serial_app.putchar, to serial.processed_putchar);
+
+        connection seL4SerialServer serial_input(from serial_app.getchar, to serial.getchar);
+        connection seL4TimeServer serialserver_timer(from serial.timeout, to time_server.the_timer);
+
+        connection seL4GlobalAsynchCallback global_callback(from serial_app.self, to serial_app.wait);
+    }
+    configuration {
+        serial_app.putchar_attributes = 0;
+        serial_app.getchar_global_endpoint = "serial_app";
+        serial_app.getchar_badge = "1";
+        serial_app.getchar_attributes = "0";
+        serial_app.getchar_shmem_size = 0x1000;
+
+        serial.timeout_attributes = 1;
+        time_server.putchar_attributes = 0;
+
+        time_server.timers_per_client = 1;
+
+        serial.wait_global_endpoint = "serial";
+        serial.self_global_endpoint = "serial";
+
+        serial_app.wait_global_endpoint = "serial_app";
+        serial_app.self_global_endpoint = "serial_app";
+
+    }
+}
